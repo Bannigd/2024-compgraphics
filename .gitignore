@@ -1,4 +1,4 @@
-*.sh
 *.pptx
 *.xcf
 *.ipynb
+tmux-session.sh
