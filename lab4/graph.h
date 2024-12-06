@@ -3,6 +3,7 @@
 #include <cmath>
 #include <fstream>
 #include <iostream>
+#include <memory>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -99,31 +100,64 @@ struct Vertex {
     this->viewCoords = Vec3(x_v, y_v, z_v);
   }
   friend std::ostream &operator<<(std::ostream &out, const Vertex &Ver);
+  void draw(const int &d, const int &xShift, const int &yShift) {
+    DrawCircle(d * viewCoords.x / viewCoords.z + xShift,
+               -d * viewCoords.y / viewCoords.z + yShift, 5, RED);
+  }
 };
 
 struct Edge {
-  int startIdx, endIdx;
+  Vertex &start, &end;
   friend std::ostream &operator<<(std::ostream &out, const Edge &Edge);
-  Edge() {}
-  Edge(int start, int end) {
-    this->startIdx = start;
-    this->endIdx = end;
+  Edge(Vertex &st, Vertex &en) : start(st), end(en) {
+    this->start = st;
+    this->end = en;
+  }
+  Edge operator=(Edge e) {
+    this->start = e.start;
+    this->end = e.end;
+    return *this;
+  }
+  void draw(const int &d, const int &xShift, const int &yShift) {
+    DrawLine(d * start.viewCoords.x / start.viewCoords.z + xShift,
+             -d * start.viewCoords.y / start.viewCoords.z + yShift,
+             d * end.viewCoords.x / end.viewCoords.z + xShift,
+             -d * end.viewCoords.y / end.viewCoords.z + yShift, BLUE);
   }
 };
 
 class Triangle {
 public:
-  int idxA, idxB, idxC;
-  // Vertex a;
-  // Vertex b;
-  // Vertex c;
+  Vertex &A;
+  Vertex &B;
+  Vertex &C;
   bool onScreen; // true if triangle is before viewpoint
-  Triangle(int a, int b, int c) {
-    this->idxA = a - 1;
-    this->idxB = b - 1;
-    this->idxC = c - 1;
+  Triangle(Vertex &A, Vertex &B, Vertex &C) : A(A), B(B), C(C) {
+    this->A = A;
+    this->B = B;
+    this->C = C;
+  }
+  Triangle operator=(Triangle t) {
+    this->A = t.A;
+    this->B = t.B;
+    this->C = t.C;
+    return *this;
   }
   friend std::ostream &operator<<(std::ostream &out, const Triangle &Triangle);
+  void draw(const int &d, const int &xShift, const int &yShift) {
+    DrawLine(d * A.viewCoords.x / A.viewCoords.z + xShift,
+             -d * A.viewCoords.y / A.viewCoords.z + yShift,
+             d * B.viewCoords.x / B.viewCoords.z + xShift,
+             -d * B.viewCoords.y / B.viewCoords.z + yShift, GREEN);
+    DrawLine(d * A.viewCoords.x / A.viewCoords.z + xShift,
+             -d * A.viewCoords.y / A.viewCoords.z + yShift,
+             d * C.viewCoords.x / C.viewCoords.z + xShift,
+             -d * C.viewCoords.y / C.viewCoords.z + yShift, GREEN);
+    DrawLine(d * C.viewCoords.x / C.viewCoords.z + xShift,
+             -d * C.viewCoords.y / C.viewCoords.z + yShift,
+             d * B.viewCoords.x / B.viewCoords.z + xShift,
+             -d * B.viewCoords.y / B.viewCoords.z + yShift, GREEN);
+  }
 };
 
 class WFModel {
@@ -132,8 +166,8 @@ public:
   std::vector<Edge> edges;
   std::vector<Triangle> triangles;
   WFModel() {}
-  WFModel(std::vector<Vertex> vertices, std::vector<Edge> edges,
-          std::vector<Triangle> triangles) {
+  WFModel(std::vector<Vertex> &vertices, std::vector<Edge> &edges,
+          std::vector<Triangle> &triangles) {
     this->vertices = vertices;
     this->edges = edges;
     this->triangles = triangles;
@@ -171,47 +205,16 @@ public:
   void draw(const int &xShift, const int &yShift) {
     float d = 300.;
 
-    // draw vertices
     for (auto &vertex : Figure->vertices) {
-      DrawCircle(d * vertex.viewCoords.x / vertex.viewCoords.z + xShift,
-                 -d * vertex.viewCoords.y / vertex.viewCoords.z + yShift, 5,
-                 BLUE);
+      vertex.draw(d, xShift, yShift);
     }
 
-    // draw edges
-    // for (auto &edge : Figure->edges) {
-    //   DrawLine(d * Figure->vertices[edge.startIdx].viewCoords.x /
-    //                    Figure->vertices[edge.startIdx].viewCoords.z +
-    //                xShift,
-    //            -d * Figure->vertices[edge.startIdx].viewCoords.y /
-    //                    Figure->vertices[edge.startIdx].viewCoords.z +
-    //                yShift,
-    //            d * Figure->vertices[edge.endIdx].viewCoords.x /
-    //                    Figure->vertices[edge.endIdx].viewCoords.z +
-    //                xShift,
-    //            -d * Figure->vertices[edge.endIdx].viewCoords.y /
-    //                    Figure->vertices[edge.endIdx].viewCoords.z +
-    //                yShift,
-    //            BLUE);
-    // }
-    // draw triangles
-    for (auto &trig : Figure->triangles) {
-      Vertex A = Figure->vertices[trig.idxA];
-      Vertex B = Figure->vertices[trig.idxB];
-      Vertex C = Figure->vertices[trig.idxC];
+    for (auto &edge : Figure->edges) {
+      edge.draw(d, xShift, yShift);
+    }
 
-      DrawLine(d * A.viewCoords.x / A.viewCoords.z + xShift,
-               -d * A.viewCoords.y / A.viewCoords.z + yShift,
-               d * B.viewCoords.x / B.viewCoords.z + xShift,
-               -d * B.viewCoords.y / B.viewCoords.z + yShift, BLUE);
-      DrawLine(d * A.viewCoords.x / A.viewCoords.z + xShift,
-               -d * A.viewCoords.y / A.viewCoords.z + yShift,
-               d * C.viewCoords.x / C.viewCoords.z + xShift,
-               -d * C.viewCoords.y / C.viewCoords.z + yShift, BLUE);
-      DrawLine(d * B.viewCoords.x / B.viewCoords.z + xShift,
-               -d * B.viewCoords.y / B.viewCoords.z + yShift,
-               d * C.viewCoords.x / C.viewCoords.z + xShift,
-               -d * C.viewCoords.y / C.viewCoords.z + yShift, BLUE);
+    for (auto &trig : Figure->triangles) {
+      trig.draw(d, xShift, yShift);
     }
   }
   friend std::ostream &operator<<(std::ostream &out, const Scene &Scene);
@@ -229,13 +232,13 @@ inline std::ostream &operator<<(std::ostream &out, const Vertex &Ver) {
 }
 
 inline std::ostream &operator<<(std::ostream &out, const Edge &Edge) {
-  std::cout << "Start: " << Edge.startIdx << " End: " << Edge.endIdx;
+  std::cout << "Start: " << Edge.start << " End: " << Edge.end;
   return out;
 }
 
 inline std::ostream &operator<<(std::ostream &out, const Triangle &Triangle) {
-  std::cout << "A: " << Triangle.idxA << " B: " << Triangle.idxB
-            << " C: " << Triangle.idxC << '\n';
+  std::cout << "A: " << Triangle.A << " B: " << Triangle.B
+            << " C: " << Triangle.C << '\n';
   return out;
 }
 
@@ -278,7 +281,8 @@ inline std::ifstream &operator>>(std::ifstream &f, WFModel &Figure) {
   // read edges
   std::getline(f, buffer);
   nEdges = std::stoi(buffer);
-  std::vector<Edge> edges(nEdges);
+  // std::vector<Edge> edges(nEdges);
+  std::vector<Edge> edges;
 
   for (int i = 0; i < nEdges; i++) {
     std::getline(f, buffer);
@@ -288,7 +292,9 @@ inline std::ifstream &operator>>(std::ifstream &f, WFModel &Figure) {
       std::getline(line, cell[j], ',');
     }
     // -1 shift to align with vector index
-    edges[i] = Edge(std::stoi(cell[0]) - 1, std::stoi(cell[1]) - 1);
+    int startIdx = std::stoi(cell[0]) - 1;
+    int endIdx = std::stoi(cell[1]) - 1;
+    edges.push_back(Edge(Figure.vertices[startIdx], Figure.vertices[endIdx]));
   }
   Figure.edges = edges;
 
@@ -301,8 +307,11 @@ inline std::ifstream &operator>>(std::ifstream &f, WFModel &Figure) {
     for (int j = 0; j < 3; j++) {
       std::getline(line, cell[j], ',');
     }
-    triangles.push_back(
-        Triangle(std::stoi(cell[0]), std::stoi(cell[1]), std::stoi(cell[2])));
+    int idx1 = std::stoi(cell[0]) - 1;
+    int idx2 = std::stoi(cell[1]) - 1;
+    int idx3 = std::stoi(cell[2]) - 1;
+    triangles.push_back(Triangle(Figure.vertices[idx1], Figure.vertices[idx2],
+                                 Figure.vertices[idx3]));
   }
   Figure.triangles = triangles;
   return f;
