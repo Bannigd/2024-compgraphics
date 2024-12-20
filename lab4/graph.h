@@ -1,18 +1,18 @@
 #include "raylib.h"
-#include <cfloat>
 #include <cmath>
 #include <fstream>
 #include <iostream>
-#include <memory>
 #include <sstream>
 #include <string>
 #include <vector>
 
+#define MAX_PREC 1e-6
+
 namespace graph {
 struct Vec3 {
-  float x, y, z;
+  double x, y, z;
   Vec3() {}
-  Vec3(float x, float y, float z) {
+  Vec3(double x, double y, double z) {
     this->x = x;
     this->y = y;
     this->z = z;
@@ -34,7 +34,7 @@ struct Vec3 {
 
 struct Viewpoint {
   Vec3 coords;
-  float rho, theta, phi;
+  double rho, theta, phi;
   Viewpoint() {}
   Viewpoint(Vec3 pos) {
     coords = pos;
@@ -44,7 +44,7 @@ struct Viewpoint {
   void updateSphere() {
     this->rho = std::sqrt(std::pow(coords.x, 2) + std::pow(coords.y, 2) +
                           std::pow(coords.z, 2));
-    if (this->rho < 10 * FLT_EPSILON) {
+    if (this->rho < 10 * MAX_PREC) {
       this->rho = 0;
       this->theta = 0;
       this->phi = 0;
@@ -54,9 +54,9 @@ struct Viewpoint {
       this->theta = std::atan(coords.y / coords.x);
     } else if (coords.x < 0) {
       this->theta = M_PI + std::atan(coords.y / coords.x);
-    } else if (coords.x < 10 * FLT_EPSILON && coords.y >= 0) {
+    } else if (coords.x < MAX_PREC && coords.y >= 0) {
       this->theta = M_PI / 2;
-    } else if (coords.x < 10 * FLT_EPSILON && coords.y < 0) {
+    } else if (coords.x < MAX_PREC && coords.y < 0) {
       this->theta = 3 * M_PI / 2;
     };
 
@@ -71,7 +71,7 @@ struct Viewpoint {
     coords = coords + direction;
     this->updateSphere();
   }
-  void move(const float &rho, const float &theta, const float &phi) {
+  void move(const double &rho, const double &theta, const double &phi) {
     this->rho += rho;
     this->theta += theta;
     this->phi += phi;
@@ -85,24 +85,28 @@ struct Vertex {
   Vec3 viewCoords;
   Vertex() {}
   Vertex(Vec3 coords) { this->worldCoords = coords; }
-  Vertex(float x, float y, float z) { this->worldCoords = Vec3(x, y, z); }
+  Vertex(double x, double y, double z) { this->worldCoords = Vec3(x, y, z); }
 
   void world2View(const Viewpoint &Camera) {
-    float x_v = -worldCoords.x * std::sin(Camera.theta) +
-                worldCoords.y * std::cos(Camera.theta);
-    float y_v = -worldCoords.x * std::cos(Camera.phi) * std::cos(Camera.theta) -
-                worldCoords.y * std::cos(Camera.phi) * std::sin(Camera.theta) +
-                worldCoords.z * std::sin(Camera.phi);
-    float z_v = Camera.rho -
-                worldCoords.x * std::sin(Camera.phi) * std::cos(Camera.theta) -
-                worldCoords.y * std::sin(Camera.phi) * std::sin(Camera.theta) -
-                worldCoords.z * std::cos(Camera.phi);
+    double x_v = -worldCoords.x * std::sin(Camera.theta) +
+                 worldCoords.y * std::cos(Camera.theta);
+    double y_v =
+        -worldCoords.x * std::cos(Camera.phi) * std::cos(Camera.theta) -
+        worldCoords.y * std::cos(Camera.phi) * std::sin(Camera.theta) +
+        worldCoords.z * std::sin(Camera.phi);
+    double z_v = Camera.rho -
+                 worldCoords.x * std::sin(Camera.phi) * std::cos(Camera.theta) -
+                 worldCoords.y * std::sin(Camera.phi) * std::sin(Camera.theta) -
+                 worldCoords.z * std::cos(Camera.phi);
     this->viewCoords = Vec3(x_v, y_v, z_v);
   }
   friend std::ostream &operator<<(std::ostream &out, const Vertex &Ver);
-  void draw(const int &d, const int &xShift, const int &yShift) {
+  void draw(int i, const int &d, const int &xShift, const int &yShift) {
     DrawCircle(d * viewCoords.x / viewCoords.z + xShift,
                -d * viewCoords.y / viewCoords.z + yShift, 5, RED);
+    DrawText(std::to_string(i).c_str(),
+             d * viewCoords.x / viewCoords.z + xShift + 5,
+             -d * viewCoords.y / viewCoords.z + yShift + 5, 15, WHITE);
   }
 };
 
@@ -131,18 +135,46 @@ public:
   Vertex &A;
   Vertex &B;
   Vertex &C;
+  Vec3 n;
+  double a, b, c, h;
   bool onScreen; // true if triangle is before viewpoint
   Triangle(Vertex &A, Vertex &B, Vertex &C) : A(A), B(B), C(C) {
     this->A = A;
     this->B = B;
     this->C = C;
   }
+
   Triangle operator=(Triangle t) {
     this->A = t.A;
     this->B = t.B;
     this->C = t.C;
     return *this;
   }
+
+  void computePlane() {
+    double xA = A.viewCoords.x;
+    double yA = A.viewCoords.y;
+    double zA = A.viewCoords.z;
+    double xB = B.viewCoords.x;
+    double yB = B.viewCoords.y;
+    double zB = B.viewCoords.z;
+    double xC = C.viewCoords.x;
+    double yC = C.viewCoords.y;
+    double zC = C.viewCoords.z;
+    this->a = yA * (zB - zC) - yB * (zA - zC) + yC * (zA - zB);
+    this->b = -(xA * (zB - zC) - xB * (zA - zC) + xC * (zA - zB));
+    this->c = xA * (yB - yC) - xB * (yA - yC) + xC * (yA - yB);
+    this->h = xA * (yB * zC - yC * zB) - xB * (yA * zC - yC * zA) +
+              xC * (yA * zB - yB * zA);
+    double r = std::sqrt(a * a + b * b + c * c);
+    this->a = this->a / r;
+    this->b = this->b / r;
+    this->c = this->c / r;
+    this->h = this->h / r;
+
+    this->n = Vec3(this->a, this->b, this->c);
+  }
+
   friend std::ostream &operator<<(std::ostream &out, const Triangle &Triangle);
   void draw(const int &d, const int &xShift, const int &yShift) {
     DrawLine(d * A.viewCoords.x / A.viewCoords.z + xShift,
@@ -187,9 +219,13 @@ class Scene {
 public:
   Viewpoint *Camera;
   WFModel *Figure;
-  Scene(Viewpoint &View, WFModel &Figure) {
+  int d = 300;
+  int xShift, yShift;
+  Scene(Viewpoint &View, WFModel &Figure, int xShift, int yShift) {
     this->Camera = &View;
     this->Figure = &Figure;
+    this->xShift = xShift;
+    this->yShift = yShift;
     Figure.computeSphereCoords(*Camera);
   }
   void changeView(const Vec3 &direction) {
@@ -197,24 +233,172 @@ public:
     Figure->computeSphereCoords(*Camera);
   }
 
-  void changeView(const float &rho, const float &theta, const float &phi) {
+  void changeView(const double &rho, const double &theta, const double &phi) {
     this->Camera->move(rho, theta, phi);
     Figure->computeSphereCoords(*Camera);
   }
 
-  void draw(const int &xShift, const int &yShift) {
-    float d = 300.;
+  bool testVisibility(const Edge &edge) {
+    bool visible = true;
+    for (Triangle &trig : this->Figure->triangles) {
+      trig.computePlane();
+      if (trig.h < -MAX_PREC) {
+        // std::cout << "skipped trig with h<0\n";
+        continue;
+      }
+      Vec3 P = edge.start.viewCoords;
+      Vec3 Q = edge.end.viewCoords;
+      Vec3 A = trig.A.viewCoords;
+      Vec3 B = trig.B.viewCoords;
+      Vec3 C = trig.C.viewCoords;
 
-    for (auto &vertex : Figure->vertices) {
-      vertex.draw(d, xShift, yShift);
+      // TEST 1
+      double eps1 = MAX_PREC + MAX_PREC * trig.h;
+      double hP = (trig.a * P.x + trig.b * P.y + trig.c * P.z);
+      double hQ = (trig.a * Q.x + trig.b * Q.y + trig.c * Q.z);
+
+      if (hP <= (trig.h + eps1) && hQ <= (trig.h + eps1)) {
+        continue;
+      }
+
+      // TEST 2
+      double K1 = P.y * Q.z - Q.y * P.z;
+      double K2 = Q.x * P.z - P.x * Q.z;
+      double K3 = P.x * Q.y - Q.x * P.y;
+      double dA = K1 * A.x + K2 * A.y + K3 * A.z;
+      double dB = K1 * B.x + K2 * B.y + K3 * B.z;
+      double dC = K1 * C.x + K2 * C.y + K3 * C.z;
+      int eA = dA > MAX_PREC ? 1 : dA < -MAX_PREC ? -1 : 0;
+      int eB = dB > MAX_PREC ? 1 : dB < -MAX_PREC ? -1 : 0;
+      int eC = dC > MAX_PREC ? 1 : dC < -MAX_PREC ? -1 : 0;
+
+      if (abs(eA + eB + eC) >= 2) {
+        continue;
+      }
+      // TEST 3
+
+      bool Poutside = false, Qoutside = false, outside = false;
+
+      double lamI = 1., lamJ = 0.;
+
+      for (int i = 0; i < 3; i++) {
+        double lambda, mu;
+        double C1 = A.y * B.z - B.y * A.z;
+        double C2 = A.z * B.x - B.z * A.x;
+        double C3 = A.x * B.y - B.x * A.y;
+        double Cpos = C1 * C.x + C2 * C.y + C3 * C.z;
+        double Ppos = C1 * P.x + C2 * P.y + C3 * P.z;
+        double Qpos = C1 * Q.x + C2 * Q.y + C3 * Q.z;
+        bool Pbeyond, Qbeyond;
+        if (Cpos > MAX_PREC) {
+          Pbeyond = Ppos < -MAX_PREC;
+          Qbeyond = Qpos < -MAX_PREC;
+          // one point is opposite to C and another is opposite or on edge
+          outside =
+              (Pbeyond && Qpos < MAX_PREC) || (Qbeyond && Ppos < MAX_PREC);
+        } else if (Cpos < -MAX_PREC) {
+          Pbeyond = Ppos > MAX_PREC;
+          Qbeyond = Qpos > MAX_PREC;
+          outside =
+              (Pbeyond && Qpos > -MAX_PREC) || (Qbeyond && Ppos > -MAX_PREC);
+        } else {
+          // if point C is on plane EAB, then PQ is visible
+          outside = true;
+        }
+        if (outside) {
+          break;
+        }
+
+        Poutside = Poutside || Pbeyond;
+        Qoutside = Qoutside || Qbeyond;
+        lambda =
+            std::abs(Qpos - Ppos) <= MAX_PREC ? 1e7 : -Ppos / (Qpos - Ppos);
+        mu = std::abs(dB - dA) <= MAX_PREC ? 1e7 : -dA / (dB - dA);
+
+        if (mu >= -MAX_PREC && mu <= 1 + MAX_PREC && lambda >= -MAX_PREC &&
+            lambda <= 1 + MAX_PREC) {
+          if (lambda < lamI)
+            lamI = lambda;
+          if (lambda > lamJ)
+            lamJ = lambda;
+        }
+        Vec3 temp1 = A;
+        A = B;
+        B = C;
+        C = temp1;
+        double temp2 = dA;
+        dA = dB;
+        dB = dC;
+        dC = temp2;
+      }
+
+      if (outside) {
+        continue;
+      }
+
+      // TEST 4
+      if (!(Poutside || Qoutside)) { // P and Q both inside
+        visible = false;
+        break;
+      }
+
+      // TEST 5: PQ interescts pyramid EABC before plane ABC
+
+      double r1 = Q.x - P.x;
+      double r2 = Q.y - P.y;
+      double r3 = Q.z - P.z;
+
+      Vec3 vI = Vec3(P.x + lamI * r1, P.y + lamI * r2, P.z + lamI * r3);
+      Vec3 vJ = Vec3(P.x + lamJ * r1, P.y + lamJ * r2, P.z + lamJ * r3);
+      if (trig.a * vI.x + trig.b * vI.y + trig.c * vI.z < trig.h - eps1) {
+        continue;
+      }
+      if (trig.a * vJ.x + trig.b * vJ.y + trig.c * vJ.z < trig.h - eps1) {
+        continue;
+      }
+
+      // TEST 6
+
+      if (Poutside) {
+        Vertex I;
+        I.viewCoords = vI;
+        Edge IP = Edge(I, edge.start);
+        if (this->testVisibility(IP)) {
+          IP.draw(this->d, this->xShift, this->yShift);
+        }
+      }
+
+      if (Qoutside) {
+        Vertex J;
+        J.viewCoords = vJ;
+        Edge JP = Edge(J, edge.end);
+        if (this->testVisibility(JP)) {
+          JP.draw(this->d, this->xShift, this->yShift);
+        }
+      }
+      // all checks failed so triangle blocks view of this edge => we dont draw
+      // it.
+      visible = false;
+      break;
     }
+    return visible;
+  }
+  void draw() {
+
+    // int i = 1;
+    // for (auto &vertex : Figure->vertices) {
+    //   vertex.draw(i, this->d, this->xShift, this->yShift);
+    //   i++;
+    // }
+
+    // for (auto &trig : Figure->triangles) {
+    //   trig.draw(d, xShift, yShift);
+    // }
 
     for (auto &edge : Figure->edges) {
-      edge.draw(d, xShift, yShift);
-    }
-
-    for (auto &trig : Figure->triangles) {
-      trig.draw(d, xShift, yShift);
+      if (this->testVisibility(edge)) {
+        edge.draw(this->d, this->xShift, this->yShift);
+      }
     }
   }
   friend std::ostream &operator<<(std::ostream &out, const Scene &Scene);
@@ -281,7 +465,6 @@ inline std::ifstream &operator>>(std::ifstream &f, WFModel &Figure) {
   // read edges
   std::getline(f, buffer);
   nEdges = std::stoi(buffer);
-  // std::vector<Edge> edges(nEdges);
   std::vector<Edge> edges;
 
   for (int i = 0; i < nEdges; i++) {
