@@ -117,7 +117,7 @@ struct Edge {
     this->start = st;
     this->end = en;
   }
-  Edge operator=(Edge e) {
+  Edge& operator=(const Edge& e) {
     this->start = e.start;
     this->end = e.end;
     return *this;
@@ -144,7 +144,7 @@ public:
     this->C = C;
   }
 
-  Triangle operator=(Triangle t) {
+  Triangle& operator=(const Triangle& t) {
     this->A = t.A;
     this->B = t.B;
     this->C = t.C;
@@ -434,7 +434,7 @@ inline std::ostream &operator<<(std::ostream &out, const Viewpoint &Camera) {
 
 inline std::ostream &operator<<(std::ostream &out, const WFModel &Figure) {
   std::cout << "Number of vertices = " << Figure.vertices.size() << "\n";
-  for (int i = 0; i < Figure.vertices.size(); i++) {
+  for (size_t i = 0; i < Figure.vertices.size(); i++) {
     std::cout << "Vertex #" << i << " " << Figure.vertices[i];
   }
   return out;

@@ -37,10 +37,11 @@ int main(int argc, char *argv[]) {
   graph::Scene Scene(Camera2, Model, width / 2, height / 2);
 
   InitWindow(width, height, "Screen projection");
-  SetTargetFPS(60);
+  //  SetTargetFPS(60);
 
   while (!WindowShouldClose()) {
     BeginDrawing();
+    DrawFPS(0, 0);
     {
       ClearBackground(BLACK);
       if (!IsKeyUp(KEY_SPACE)) {
